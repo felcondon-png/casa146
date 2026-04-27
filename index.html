@@ -14,9 +14,8 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-  // ── CONFIGURACIÓN FIREBASE ── (reemplazar con tus valores)
   const FIREBASE_CONFIG = {
     apiKey:            "AIzaSyCxdazzM_e_GB47OeYjeI7tbRDD9Vlqmgo",
     authDomain:        "materiales-146.firebaseapp.com",
@@ -26,133 +25,103 @@
     appId:             "1:911194103106:web:10014d0ad1733712c3fcdb"
   };
 
-  const FIREBASE_READY = FIREBASE_CONFIG.apiKey !== "TU_API_KEY";
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db  = getFirestore(app);
+  const USER = 'admin';
 
-  let db = null;
-  const USER_ID = () => window._currentUser || 'admin';
-
-  if (FIREBASE_READY) {
-    const app = initializeApp(FIREBASE_CONFIG);
-    db = getFirestore(app);
+  function setSyncStatus(state){
+    const el = document.getElementById('syncDot');
+    if(!el) return;
+    el.style.background = state==='ok'?'#22c55e':state==='syncing'?'#f59e0b':'#6b7280';
+    el.title = state==='ok'?'Sincronizado':state==='syncing'?'Sincronizando...':'Sin conexión';
   }
 
-  // ── SYNC ENGINE ──────────────────────────────────────────────────────────
-  // Cada clave de datos tiene su propio documento en Firestore
-  // Estructura: /users/{userId}/{key}  → { data: <json>, updatedAt: timestamp }
-
-  async function cloudGet(key) {
-    if (!db) return null;
-    try {
-      const snap = await getDoc(doc(db, 'users', USER_ID(), 'data', key));
+  async function cloudGet(key){
+    try{
+      const snap = await getDoc(doc(db,'users',USER,'data',key));
       return snap.exists() ? snap.data().value : null;
-    } catch(e) { console.warn('cloudGet error', key, e); return null; }
+    }catch(e){ return null; }
   }
 
-  async function cloudSet(key, value) {
-    if (!db) return;
-    try {
-      await setDoc(doc(db, 'users', USER_ID(), 'data', key), {
-        value,
-        updatedAt: Date.now()
-      });
-    } catch(e) { console.warn('cloudSet error', key, e); }
+  async function cloudSet(key, value){
+    try{
+      await setDoc(doc(db,'users',USER,'data',key),{value, updatedAt: Date.now()});
+    }catch(e){ console.warn('cloudSet error',key,e); }
   }
 
-  function cloudListen(key, callback) {
-    if (!db) return;
-    onSnapshot(doc(db, 'users', USER_ID(), 'data', key), snap => {
-      if (snap.exists()) callback(snap.data().value);
+  function cloudListen(key, cb){
+    onSnapshot(doc(db,'users',USER,'data',key), snap=>{
+      if(snap.exists()) cb(snap.data().value);
     });
   }
 
-  // Exponer al resto de la app
-  window._cloud = { get: cloudGet, set: cloudSet, listen: cloudListen, ready: FIREBASE_READY };
-
-  // Indicador de estado sync
-  function setSyncStatus(state) {
-    // state: 'syncing' | 'ok' | 'offline'
-    const el = document.getElementById('syncDot');
-    if (!el) return;
-    const colors = { syncing: '#f59e0b', ok: '#22c55e', offline: '#6b7280' };
-    el.style.background = colors[state] || colors.offline;
-    el.title = state === 'ok' ? 'Sincronizado' : state === 'syncing' ? 'Sincronizando...' : 'Sin conexión (guardado local)';
+  // Merge purchases sin duplicar por id
+  function mergePurchases(cloudVal, localVal){
+    const ca = JSON.parse(cloudVal||'[]');
+    const la = JSON.parse(localVal||'[]');
+    const merged = [...ca];
+    la.forEach(lp=>{ if(!merged.find(cp=>cp.id===lp.id)) merged.push(lp); });
+    merged.sort((a,b)=>a.id-b.id);
+    return JSON.stringify(merged);
   }
-  window._setSyncStatus = setSyncStatus;
 
-  // Inicializar sync cuando el usuario hace login
-  window._initSync = async function() {
-    if (!FIREBASE_READY) {
-      setSyncStatus('offline');
-      return;
-    }
+  // Merge listas sin duplicar
+  function mergeLists(cloudVal, localVal){
+    const ca = JSON.parse(cloudVal||'[]');
+    const la = JSON.parse(localVal||'[]');
+    const merged = [...new Set([...ca,...la])];
+    merged.sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+    return JSON.stringify(merged);
+  }
+
+  async function initSync(){
     setSyncStatus('syncing');
-    try {
-      // Bajar datos de la nube si son más nuevos
-      const keys = ['mat_purchases', 'mat_prods', 'mat_cats', 'mat_provs'];
-      for (const key of keys) {
-        const cloud = await cloudGet(key);
-        if (cloud !== null) {
-          // Merge: si hay datos locales Y en nube, usar el más completo
-          const local = localStorage.getItem(key);
-          if (!local) {
-            localStorage.setItem(key, cloud);
-          } else {
-            // Para purchases: unir por id sin duplicar
-            if (key === 'mat_purchases') {
-              const localArr = JSON.parse(local);
-              const cloudArr = JSON.parse(cloud);
-              const merged = [...cloudArr];
-              localArr.forEach(lp => {
-                if (!merged.find(cp => cp.id === lp.id)) merged.push(lp);
-              });
-              merged.sort((a,b) => a.id - b.id);
-              localStorage.setItem(key, JSON.stringify(merged));
-              await cloudSet(key, JSON.stringify(merged));
-            } else {
-              // Para listas: unir sin duplicar
-              const localArr = JSON.parse(local);
-              const cloudArr = JSON.parse(cloud);
-              const merged = [...new Set([...cloudArr, ...localArr])];
-              merged.sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-              localStorage.setItem(key, JSON.stringify(merged));
-              await cloudSet(key, JSON.stringify(merged));
-            }
-          }
+    try{
+      const keys = ['mat_purchases','mat_prods','mat_cats','mat_provs'];
+      for(const key of keys){
+        const cloudVal = await cloudGet(key);
+        const localVal = localStorage.getItem(key);
+        if(cloudVal === null){
+          // Nada en nube — subir local si existe
+          if(localVal) await cloudSet(key, localVal);
         } else {
-          // No hay datos en nube: subir los locales
-          const local = localStorage.getItem(key);
-          if (local) await cloudSet(key, local);
+          // Hay datos en nube — hacer merge con local
+          const merged = key==='mat_purchases'
+            ? mergePurchases(cloudVal, localVal)
+            : mergeLists(cloudVal, localVal);
+          localStorage.setItem(key, merged);
+          await cloudSet(key, merged);
         }
       }
       setSyncStatus('ok');
 
       // Escuchar cambios en tiempo real
-      cloudListen('mat_purchases', val => {
-        const cloudArr = JSON.parse(val);
-        const localArr = JSON.parse(localStorage.getItem('mat_purchases') || '[]');
-        const merged = [...cloudArr];
-        localArr.forEach(lp => { if (!merged.find(cp => cp.id === lp.id)) merged.push(lp); });
-        merged.sort((a,b) => a.id - b.id);
-        localStorage.setItem('mat_purchases', JSON.stringify(merged));
-        if (typeof renderHist === 'function') renderHist();
-        if (typeof renderResumen === 'function') renderResumen();
+      cloudListen('mat_purchases', val=>{
+        const merged = mergePurchases(val, localStorage.getItem('mat_purchases'));
+        localStorage.setItem('mat_purchases', merged);
+        if(typeof renderHist==='function') renderHist();
+        if(typeof renderResumen==='function') renderResumen();
         setSyncStatus('ok');
       });
 
-    } catch(e) {
-      console.warn('Sync init error', e);
+    }catch(e){
+      console.warn('Sync error',e);
       setSyncStatus('offline');
     }
-  };
+  }
 
-  // Wrapper: guardar local + subir a nube
-  window._cloudSave = async function(key, value) {
+  // Guardar local + nube
+  async function cloudSave(key, value){
     localStorage.setItem(key, value);
-    if (!FIREBASE_READY) return;
-    window._setSyncStatus('syncing');
-    await window._cloud.set(key, value);
-    window._setSyncStatus('ok');
-  };
+    setSyncStatus('syncing');
+    await cloudSet(key, value);
+    setSyncStatus('ok');
+  }
+
+  // Exponer al resto de la app cuando el DOM esté listo
+  window._cloudSave   = cloudSave;
+  window._initSync    = initSync;
+  window._setSyncStatus = setSyncStatus;
 </script>
 <style>
 :root {
