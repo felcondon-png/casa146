@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Materiales — Casa 146</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
 <meta name="theme-color" content="#0f1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -717,11 +718,12 @@ document.addEventListener('keydown',e=>{
 
 function doLogout(){
   currentUser='';
+  window._currentUser='';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('appShell').style.display='none';
   document.getElementById('loginPass').value='';
-  document.getElementById('loginKey').value='';
   document.getElementById('loginErr').style.display='none';
+  if(window._setSyncStatus) window._setSyncStatus('offline');
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────
