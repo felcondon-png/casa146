@@ -786,6 +786,7 @@ function getPurchases(){
 }
 function savePurchases(arr){window._cloudSave?window._cloudSave('mat_purchases',JSON.stringify(arr)):localStorage.setItem('mat_purchases',JSON.stringify(arr));}
 
+
 // ── SCAN ──────────────────────────────────────────────────────────────────
 function handleFile(inp){
   const file=inp.files[0];if(!file)return;
@@ -796,6 +797,33 @@ function handleFile(inp){
     document.getElementById('analyzeBtn').style.display='inline-block';
   };
   reader.readAsDataURL(file);
+}
+
+function compressImage(file,maxBytes=4500000){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        let {width:w,height:h}=img;
+        const maxDim=2048;
+        if(w>maxDim||h>maxDim){if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}else{w=Math.round(w*maxDim/h);h=maxDim;}}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        let quality=0.85;
+        const tryCompress=()=>{
+          const dataUrl=canvas.toDataURL('image/jpeg',quality);
+          const bytes=(dataUrl.length-dataUrl.indexOf(',')-1)*0.75;
+          if(bytes<=maxBytes||quality<=0.4){resolve(dataUrl.split(',')[1]);}
+          else{quality-=0.1;tryCompress();}
+        };
+        tryCompress();
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function analyzeImage(){
@@ -810,38 +838,32 @@ async function analyzeImage(){
   pb.style.display='block';pf.style.width='0';
   let prog=0;
   const iv=setInterval(()=>{prog=Math.min(prog+6,88);pf.style.width=prog+'%';},220);
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const b64=e.target.result.split(',')[1];
-    try{
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-5',max_tokens:1200,
-          messages:[{role:'user',content:[
-            {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},
-            {type:'text',text:`Analiza esta boleta o factura de materiales de construcción. Extrae todos los productos. Responde SOLO JSON válido sin texto adicional ni markdown:
-{"proveedor":"nombre tienda","fecha":"DD/MM/YYYY","items":[{"producto":"nombre","cantidad":1,"precio_unitario":1000,"categoria":"MATERIALES"}]}
-Categorías disponibles: ${getCats().join(', ')}. Asigna la categoría más apropiada a cada producto según su nombre. Si no encuentras dato usa null.`}
-          ]}]
-        })
-      });
-      clearInterval(iv);pf.style.width='100%';
-      const data=await resp.json();
-      if(data.error){throw new Error(data.error.message);}
-      const text=data.content.map(i=>i.text||'').join('');
-      let parsed;
-      try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
-      catch{parsed={proveedor:'Verificar',fecha:new Date().toLocaleDateString('es-CL'),items:[{producto:'Revisar boleta',cantidad:1,precio_unitario:0,categoria:'MATERIALES'}]};}
-      setTimeout(()=>{pb.style.display='none';document.getElementById('spinner').style.display='none';showExtracted(parsed);},300);
-    }catch(err){
-      clearInterval(iv);pb.style.display='none';document.getElementById('spinner').style.display='none';
-      document.getElementById('analyzeBtn').style.display='inline-block';
-      toast('Error IA: '+err.message,'error');
-    }
-  };
-  reader.readAsDataURL(file);
+  try{
+    const b64=await compressImage(file);
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-5',max_tokens:1200,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+          {type:'text',text:`Analiza esta boleta o factura de materiales de construcción. Extrae todos los productos. Responde SOLO JSON válido sin texto adicional ni markdown:\n{"proveedor":"nombre tienda","fecha":"DD/MM/YYYY","items":[{"producto":"nombre","cantidad":1,"precio_unitario":1000,"categoria":"MATERIALES"}]}\nCategorías disponibles: ${getCats().join(', ')}. Asigna la categoría más apropiada a cada producto según su nombre. Si no encuentras dato usa null.`}
+        ]}]
+      })
+    });
+    clearInterval(iv);pf.style.width='100%';
+    const data=await resp.json();
+    if(data.error){throw new Error(data.error.message);}
+    const text=data.content.map(i=>i.text||'').join('');
+    let parsed;
+    try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
+    catch{parsed={proveedor:'Verificar',fecha:new Date().toLocaleDateString('es-CL'),items:[{producto:'Revisar boleta',cantidad:1,precio_unitario:0,categoria:'MATERIALES'}]};}
+    setTimeout(()=>{pb.style.display='none';document.getElementById('spinner').style.display='none';showExtracted(parsed);},300);
+  }catch(err){
+    clearInterval(iv);pb.style.display='none';document.getElementById('spinner').style.display='none';
+    document.getElementById('analyzeBtn').style.display='inline-block';
+    toast('Error IA: '+err.message,'error');
+  }
 }
 
 function showExtracted(data){
