@@ -1,4 +1,4 @@
-const CACHE = 'casa146-v1';
+const CACHE = 'casa146-v3';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
@@ -14,10 +14,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Solo cachear el HTML principal — el resto (Firebase, fonts) va directo a red
+  // Siempre ir a la red primero — solo usar caché si falla la red
   if (e.request.url.includes('index.html') || e.request.url.endsWith('/')) {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('./index.html'))
+      fetch(e.request, {cache: 'no-cache'}).catch(() => caches.match('./index.html'))
     );
   }
 });
