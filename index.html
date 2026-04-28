@@ -78,7 +78,7 @@
   async function initSync(){
     setSyncStatus('syncing');
     try{
-      const keys = ['mat_purchases','mat_prods','mat_cats','mat_provs'];
+      const keys = ['mat_purchases','mat_prods','mat_cats','mat_provs','mat_apikey'];
       for(const key of keys){
         const cloudVal = await cloudGet(key);
         const localVal = localStorage.getItem(key);
@@ -86,12 +86,23 @@
           // Nada en nube — subir local si existe
           if(localVal) await cloudSet(key, localVal);
         } else {
-          // Hay datos en nube — hacer merge con local
-          const merged = key==='mat_purchases'
-            ? mergePurchases(cloudVal, localVal)
-            : mergeLists(cloudVal, localVal);
-          localStorage.setItem(key, merged);
-          await cloudSet(key, merged);
+          // Hay datos en nube — merge solo para purchases y listas
+          if(key === 'mat_apikey'){
+            // API key: usar la de nube, guardar local
+            localStorage.setItem(key, cloudVal);
+            window._apiKeyMem = cloudVal;
+          } else {
+            const merged = key==='mat_purchases'
+              ? mergePurchases(cloudVal, localVal)
+              : mergeLists(cloudVal, localVal);
+            localStorage.setItem(key, merged);
+            await cloudSet(key, merged);
+          }
+        }
+        // Cargar API key en memoria si existe local
+        if(key === 'mat_apikey'){
+          const stored = localStorage.getItem('mat_apikey');
+          if(stored) window._apiKeyMem = stored;
         }
       }
       setSyncStatus('ok');
@@ -123,6 +134,7 @@
   window._cloudSave   = cloudSave;
   window._initSync    = initSync;
   window._setSyncStatus = setSyncStatus;
+  window._apiKeyMem = '';
 </script>
 <style>
 :root {
@@ -656,14 +668,17 @@ const CAT_COLORS={'ÁRIDO':'#f59e0b','ELÉCTRICO':'#3b82f6','MATERIALES':'#94a3b
 // ── AUTH ──────────────────────────────────────────────────────────────────
 function getUsers(){return JSON.parse(localStorage.getItem('mat_users')||'{"admin":"admin123"}')}
 function saveUsers(u){localStorage.setItem('mat_users',JSON.stringify(u))}
-let _apiKeyMem = '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';
+let _apiKeyMem = '';
 function getApiKey(){
+  if(window._apiKeyMem) return window._apiKeyMem;
   if(_apiKeyMem) return _apiKeyMem;
   try{ return localStorage.getItem('mat_apikey')||''; }catch(e){ return ''; }
 }
 function saveApiKey(k){
   _apiKeyMem = k;
+  window._apiKeyMem = k;
   try{ localStorage.setItem('mat_apikey',k); }catch(e){}
+  if(window._cloudSave) window._cloudSave('mat_apikey', k);
 }
 function saveInlineApiKey(){
   const k=document.getElementById('inlineApiKey').value.trim();
