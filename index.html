@@ -669,10 +669,13 @@ const CAT_COLORS={'ÁRIDO':'#f59e0b','ELÉCTRICO':'#3b82f6','MATERIALES':'#94a3b
 function getUsers(){return JSON.parse(localStorage.getItem('mat_users')||'{"admin":"admin123"}')}
 function saveUsers(u){localStorage.setItem('mat_users',JSON.stringify(u))}
 let _apiKeyMem = '';
+const _FALLBACK_KEY = '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';
 function getApiKey(){
-  if(window._apiKeyMem) return window._apiKeyMem;
-  if(_apiKeyMem) return _apiKeyMem;
-  try{ return localStorage.getItem('mat_apikey')||''; }catch(e){ return ''; }
+  if(window._apiKeyMem && window._apiKeyMem.startsWith('sk-ant')) return window._apiKeyMem;
+  if(_apiKeyMem && _apiKeyMem.startsWith('sk-ant')) return _apiKeyMem;
+  const stored = localStorage.getItem('mat_apikey')||'';
+  if(stored && stored.startsWith('sk-ant')) return stored;
+  return _FALLBACK_KEY;
 }
 function saveApiKey(k){
   _apiKeyMem = k;
@@ -714,12 +717,19 @@ function doLogin(){
   document.getElementById('userBadge').textContent=user;
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='flex';
-  // Iniciar sincronización Firebase
-  if(window._initSync) window._initSync().then(()=>{populateSelects();renderHist();renderResumen();});
-  else {populateSelects();renderHist();renderResumen();}
   document.getElementById('m_fecha').value=new Date().toISOString().split('T')[0];
-  const banner=document.getElementById('apiKeyBanner');
-  if(banner) banner.style.display=getApiKey()?'none':'block';
+  // Iniciar sincronización Firebase — mostrar banner solo después de sync
+  if(window._initSync){
+    window._initSync().then(()=>{
+      populateSelects();renderHist();renderResumen();
+      const banner=document.getElementById('apiKeyBanner');
+      if(banner) banner.style.display=getApiKey()?'none':'block';
+    });
+  } else {
+    populateSelects();renderHist();renderResumen();
+    const banner=document.getElementById('apiKeyBanner');
+    if(banner) banner.style.display=getApiKey()?'none':'block';
+  }
 }
 
 document.addEventListener('keydown',e=>{
@@ -1015,21 +1025,32 @@ function confirmItems(){
 
   // Resolve provider first (one prompt for the whole boleta), then save all items
   autoSaveListsWithCheck('', rawProv, (resolvedProd_, resolvedProv)=>{
-    const purchases=getPurchases();
-    items.forEach(({prod,cant,pu,cat,i})=>{
-      // Auto-add each product silently (products from scan are already typed — add if new)
-      const prods=getProds();
-      if(!prods.map(p=>p.toLowerCase()).includes(prod.toLowerCase())){
-        const sorted=([...prods,prod]).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
-        saveProds(sorted);
-      }
-      purchases.push({id:Date.now()+i,fecha,producto:prod,proveedor:resolvedProv,cant,pu,cat,dcto:0,total:Math.round(cant*pu*1.19)});
-    });
-    savePurchases(purchases);
-    populateSelects();
-    resetScan();
-    toast(`${items.length} ítem(s) guardados`,'success');
-    goPage('historial',document.querySelectorAll('.nav-btn')[2]);
+    const existing=getPurchases();
+    const newItems=items.map(({prod,cant,pu})=>({fecha,producto:prod,cant,pu}));
+    const dupes=findDuplicates(newItems, existing);
+
+    function doSave(){
+      const purchases=getPurchases();
+      items.forEach(({prod,cant,pu,cat,i})=>{
+        const prods=getProds();
+        if(!prods.map(p=>p.toLowerCase()).includes(prod.toLowerCase())){
+          const sorted=([...prods,prod]).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+          saveProds(sorted);
+        }
+        purchases.push({id:Date.now()+i,fecha,producto:prod,proveedor:resolvedProv,cant,pu,cat,dcto:0,total:Math.round(cant*pu*1.19)});
+      });
+      savePurchases(purchases);
+      populateSelects();
+      resetScan();
+      toast(`${items.length} ítem(s) guardados`,'success');
+      goPage('historial',document.querySelectorAll('.nav-btn')[2]);
+    }
+
+    if(dupes.length){
+      showDuplicateModal(dupes, doSave, ()=>{});
+    } else {
+      doSave();
+    }
   });
 }
 
@@ -1060,6 +1081,60 @@ function calcTotal(){
   document.getElementById('m_total').textContent='$'+t.toLocaleString('es-CL');
 }
 
+// ── DETECCIÓN DE DUPLICADOS ────────────────────────────────────────────────
+function findDuplicates(newItems, existing){
+  const dupes = [];
+  for(const ni of newItems){
+    const match = existing.find(p => {
+      let score = 0;
+      if(p.producto.toLowerCase() === ni.producto.toLowerCase()) score++;
+      if(p.cant === ni.cant) score++;
+      if(Math.abs(p.pu - ni.pu) < 1) score++;
+      if(p.fecha === ni.fecha) score++;
+      return score >= 2;
+    });
+    if(match) dupes.push({nuevo: ni, existente: match});
+  }
+  return dupes;
+}
+
+function showDuplicateModal(dupes, onIgnore, onCancel){
+  const old = document.getElementById('dupeModal');
+  if(old) old.remove();
+  const list = dupes.map(d => {
+    const matches = [];
+    if(d.existente.producto.toLowerCase() === d.nuevo.producto.toLowerCase()) matches.push('Producto');
+    if(d.existente.cant === d.nuevo.cant) matches.push('Cantidad');
+    if(Math.abs(d.existente.pu - d.nuevo.pu) < 1) matches.push('Precio');
+    if(d.existente.fecha === d.nuevo.fecha) matches.push('Fecha');
+    return `<div style="margin-bottom:8px;padding:10px;background:rgba(255,255,255,.05);border-radius:6px;font-size:12px">
+      <div style="color:#fbbf24;font-weight:600;margin-bottom:4px">⚠ ${matches.join(' + ')} coinciden</div>
+      <div style="color:#94a3b8">Nuevo: ${d.nuevo.producto} · ${d.nuevo.cant} un. · $${Math.round(d.nuevo.pu).toLocaleString('es-CL')} · ${d.nuevo.fecha}</div>
+      <div style="color:#64748b;margin-top:2px">Existente: ${d.existente.producto} · ${d.existente.cant} un. · $${Math.round(d.existente.pu).toLocaleString('es-CL')} · ${d.existente.fecha}</div>
+    </div>`;
+  }).join('');
+  const div = document.createElement('div');
+  div.id = 'dupeModal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  div.innerHTML = `
+    <div style="background:#181c27;border:0.5px solid rgba(255,255,255,.14);border-radius:12px;padding:1.5rem;max-width:440px;width:100%">
+      <div style="font-size:14px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Posible registro duplicado</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">${dupes.length} registro(s) similar(es) encontrado(s):</div>
+      ${list}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
+        <button id="dmIgnore" style="padding:10px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:500;cursor:pointer">
+          No es duplicado — guardar igual
+        </button>
+        <button id="dmCancel" style="padding:10px;background:transparent;border:0.5px solid rgba(255,255,255,.14);border-radius:8px;color:#94a3b8;font-size:13px;cursor:pointer">
+          Cancelar — revisar antes de guardar
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  document.getElementById('dmIgnore').onclick = () => { div.remove(); onIgnore(); };
+  document.getElementById('dmCancel').onclick = () => { div.remove(); onCancel(); };
+}
+
 function addManual(){
   const fecha=document.getElementById('m_fecha').value||today();
   const prov=document.getElementById('m_prov').value;
@@ -1071,17 +1146,27 @@ function addManual(){
   if(!prod){toast('Selecciona un producto','error');return;}
   if(cant<=0){toast('Ingresa una cantidad válida','error');return;}
   if(pu<=0){toast('Ingresa un precio unitario','error');return;}
-  const total=Math.round(cant*pu*(1-dcto/100)*1.19);
-  const arr=getPurchases();
-  arr.push({id:Date.now(),fecha,producto:prod,proveedor:prov,cant,pu,cat,dcto,total});
-  savePurchases(arr);
-  autoSaveLists(prod, prov);
-  document.getElementById('m_cant').value='';
-  document.getElementById('m_pu').value='';
-  document.getElementById('m_dcto').value='';
-  document.getElementById('m_total').textContent='$0';
-  toast('Material agregado','success');
-  goPage('historial',document.querySelectorAll('.nav-btn')[2]);
+
+  function doSave(){
+    const total=Math.round(cant*pu*(1-dcto/100)*1.19);
+    const arr=getPurchases();
+    arr.push({id:Date.now(),fecha,producto:prod,proveedor:prov,cant,pu,cat,dcto,total});
+    savePurchases(arr);
+    autoSaveLists(prod, prov);
+    document.getElementById('m_cant').value='';
+    document.getElementById('m_pu').value='';
+    document.getElementById('m_dcto').value='';
+    document.getElementById('m_total').textContent='$0';
+    toast('Material agregado','success');
+    goPage('historial',document.querySelectorAll('.nav-btn')[2]);
+  }
+
+  const dupes = findDuplicates([{fecha,producto:prod,cant,pu}], getPurchases());
+  if(dupes.length){
+    showDuplicateModal(dupes, doSave, ()=>{});
+  } else {
+    doSave();
+  }
 }
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────
