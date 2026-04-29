@@ -669,7 +669,7 @@ const CAT_COLORS={'ÁRIDO':'#f59e0b','ELÉCTRICO':'#3b82f6','MATERIALES':'#94a3b
 function getUsers(){return JSON.parse(localStorage.getItem('mat_users')||'{"admin":"admin123"}')}
 function saveUsers(u){localStorage.setItem('mat_users',JSON.stringify(u))}
 let _apiKeyMem = '';
-const _FALLBACK_KEY = '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';
+const _FALLBACK_KEY = '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';
 function getApiKey(){
   if(window._apiKeyMem && window._apiKeyMem.startsWith('sk-ant')) return window._apiKeyMem;
   if(_apiKeyMem && _apiKeyMem.startsWith('sk-ant')) return _apiKeyMem;
