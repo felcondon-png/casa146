@@ -669,13 +669,11 @@ const CAT_COLORS={'ÁRIDO':'#f59e0b','ELÉCTRICO':'#3b82f6','MATERIALES':'#94a3b
 function getUsers(){return JSON.parse(localStorage.getItem('mat_users')||'{"admin":"admin123"}')}
 function saveUsers(u){localStorage.setItem('mat_users',JSON.stringify(u))}
 let _apiKeyMem = '';
-const _FALLBACK_KEY = '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';
+const _FALLBACK_KEY = '';
 function getApiKey(){
   if(window._apiKeyMem && window._apiKeyMem.startsWith('sk-ant')) return window._apiKeyMem;
   if(_apiKeyMem && _apiKeyMem.startsWith('sk-ant')) return _apiKeyMem;
-  const stored = localStorage.getItem('mat_apikey')||'';
-  if(stored && stored.startsWith('sk-ant')) return stored;
-  return _FALLBACK_KEY;
+  try{ return localStorage.getItem('mat_apikey')||''; }catch(e){ return ''; }
 }
 function saveApiKey(k){
   _apiKeyMem = k;
