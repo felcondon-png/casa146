@@ -545,12 +545,14 @@ tr:hover td{background:rgba(255,255,255,.02)}
         </div>
       </div>
       <div class="chips" id="filterChips"></div>
+      <div id="mergeHint" style="display:none;background:rgba(96,165,250,.08);border:0.5px solid rgba(96,165,250,.25);border-radius:8px;padding:12px;margin-bottom:12px"></div>
       <div class="card" style="padding:0;overflow:hidden">
         <div class="tbl-wrap">
           <table>
             <thead><tr>
               <th style="width:90px">Fecha</th>
               <th style="width:auto">Producto</th>
+              <th style="width:120px">Categoría</th>
               <th style="width:100px">Proveedor</th>
               <th style="width:65px">Cant.</th>
               <th style="width:100px">P.Unit.</th>
@@ -1174,12 +1176,20 @@ function renderHist(){
   const list=filterCat?all.filter(p=>p.cat===filterCat):all;
   const tbody=document.getElementById('histTbody');
   const empty=document.getElementById('emptyHist');
+  const cats=getCats();
+  const catOptions=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
   if(!list.length){tbody.innerHTML='';empty.style.display='block';}
   else{
     empty.style.display='none';
     tbody.innerHTML=list.slice().reverse().map(p=>`<tr data-id="${p.id}">
       <td><input class="cell-edit" type="date" value="${p.fecha}" onchange="editItem(${p.id},'fecha',this.value)"></td>
       <td><input class="cell-edit" type="text" value="${p.producto}" onchange="editItem(${p.id},'producto',this.value)" style="width:100%"></td>
+      <td>
+        <select class="cell-edit" onchange="editItem(${p.id},'cat',this.value)" style="width:100%;font-size:12px">
+          ${cats.map(c=>`<option value="${c}"${p.cat===c?' selected':''}>${c}</option>`).join('')}
+          ${!cats.includes(p.cat)?`<option value="${p.cat}" selected>${p.cat}</option>`:''}
+        </select>
+      </td>
       <td><input class="cell-edit" type="text" value="${p.proveedor||''}" onchange="editItem(${p.id},'proveedor',this.value)"></td>
       <td><input class="cell-edit mono" type="number" value="${p.cant}" min="0" step="0.01" onchange="editItem(${p.id},'cant',parseFloat(this.value)||0)" style="width:60px"></td>
       <td><input class="cell-edit mono" type="number" value="${p.pu}" min="0" step="1" onchange="editItem(${p.id},'pu',parseFloat(this.value)||0)" style="width:88px"></td>
@@ -1189,10 +1199,59 @@ function renderHist(){
       </button></td>
     </tr>`).join('');
   }
-  const cats=[...new Set(all.map(p=>p.cat))];
+  const cats2=[...new Set(all.map(p=>p.cat))];
   document.getElementById('filterChips').innerHTML=
     `<button class="chip${!filterCat?' active':''}" onclick="setFilter('')">Todos (${all.length})</button>`+
-    cats.map(c=>`<button class="chip${filterCat===c?' active':''}" onclick="setFilter('${c}')">${c}</button>`).join('');
+    cats2.map(c=>`<button class="chip${filterCat===c?' active':''}" onclick="setFilter('${c}')">${c}</button>`).join('');
+
+  // Sugerir agrupación de productos similares
+  suggestProductMerge(all);
+}
+
+function suggestProductMerge(purchases){
+  // Buscar productos similares que podrían ser el mismo
+  const productos=[...new Set(purchases.map(p=>p.producto))];
+  const sugerencias=[];
+  for(let i=0;i<productos.length;i++){
+    for(let j=i+1;j<productos.length;j++){
+      const s=similarity(productos[i],productos[j]);
+      if(s>=0.55 && s<1){
+        sugerencias.push({a:productos[i],b:productos[j],score:s});
+      }
+    }
+  }
+  const container=document.getElementById('mergeHint');
+  if(!container) return;
+  if(!sugerencias.length){container.style.display='none';return;}
+  // Mostrar solo la sugerencia más relevante
+  const top=sugerencias.sort((a,b)=>b.score-a.score)[0];
+  container.style.display='block';
+  container.innerHTML=`
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">💡 ¿Son el mismo producto?</div>
+    <div style="font-size:12px;margin-bottom:10px">
+      <strong style="color:#60a5fa">"${top.a}"</strong> y <strong style="color:#60a5fa">"${top.b}"</strong>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="mergeProducts('${top.a.replace(/'/g,"\\'")}','${top.b.replace(/'/g,"\\'")}','${top.a.replace(/'/g,"\\'")}');" 
+        style="flex:1;padding:6px;background:#2e75b6;border:none;border-radius:6px;color:#fff;font-size:11px;cursor:pointer">
+        Unir como "${top.a.length<=top.b.length?top.a:top.b}"
+      </button>
+      <button onclick="document.getElementById('mergeHint').style.display='none'"
+        style="padding:6px 10px;background:transparent;border:0.5px solid rgba(255,255,255,.15);border-radius:6px;color:#94a3b8;font-size:11px;cursor:pointer">
+        No son iguales
+      </button>
+    </div>`;
+}
+
+function mergeProducts(nameA, nameB, keepName){
+  const arr=getPurchases();
+  let changed=0;
+  arr.forEach(p=>{
+    if(p.producto===nameA||p.producto===nameB){p.producto=keepName;changed++;}
+  });
+  savePurchases(arr);
+  renderHist();
+  toast(`${changed} registros unificados como "${keepName}"`,'success');
 }
 
 function editItem(id,field,value){
