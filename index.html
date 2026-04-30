@@ -1519,7 +1519,6 @@ function renderResumen(){
   const neto=arr.reduce((s,p)=>s+Math.round(p.cant*p.pu),0);
   const pendiente=arr.filter(p=>p.estado==='Pendiente').reduce((s,p)=>s+p.total,0);
   const pct=Math.round(total/182940000*100);
-  const pendiente=arr.filter(p=>p.estado==='Pendiente').reduce((s,p)=>s+p.total,0);
   document.getElementById('statGrid').innerHTML=`
     <div class="stat"><div class="stat-label">Total c/IVA</div><div class="stat-val">$${fmt(total)}</div><div class="stat-sub">IVA incluido 19%</div></div>
     <div class="stat"><div class="stat-label">Total neto</div><div class="stat-val">$${fmt(neto)}</div></div>
