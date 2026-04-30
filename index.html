@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Materiales — Casa 146</title>
 <link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="icon" href="favicon.ico" type="image/x-icon">
 <meta name="theme-color" content="#0f1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -407,6 +408,15 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <div class="login-title">Materiales Casa 146</div>
     <div class="login-sub">Ingresa tus credenciales para continuar</div>
     <div class="login-field">
+      <label>Proyecto</label>
+      <div style="display:flex;gap:8px">
+        <select id="loginProject" style="flex:1;padding:10px 14px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);outline:none">
+          <option value="casa146">Casa 146</option>
+        </select>
+        <button onclick="showNewProject()" style="padding:10px 12px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius-sm);color:var(--text3);cursor:pointer;font-size:18px" title="Nuevo proyecto">+</button>
+      </div>
+    </div>
+    <div class="login-field">
       <label>Usuario</label>
       <input type="text" id="loginUser" placeholder="usuario"
         autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false">
@@ -437,7 +447,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <div class="topbar-logo">
       <div style="width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px">M</div>
       <span>Materiales</span>
-      <span class="pill">CASA 146</span>
+      <span class="pill" id="projectPill">CASA 146</span>
     </div>
     <div class="topbar-right">
       <span class="user-badge" id="userBadge"></span>
@@ -478,11 +488,12 @@ tr:hover td{background:rgba(255,255,255,.02)}
           <div class="upload-icon">
             <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           </div>
-          <div class="upload-title">Seleccionar foto de boleta</div>
-          <div class="upload-sub">JPG o PNG — desde cámara o galería</div>
+          <div class="upload-title">Seleccionar boleta o factura</div>
+          <div class="upload-sub">JPG, PNG o PDF — desde cámara, galería o archivos</div>
           <img id="previewImg" alt="preview">
+          <div id="previewPdf" style="display:none;margin-top:8px;padding:10px 16px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:13px;color:#fca5a5">📄 <span id="previewPdfName"></span></div>
         </div>
-        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this)">
+        <input type="file" id="fileInput" accept="image/*,application/pdf" style="display:none" onchange="handleFile(this)">
 
         <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
           <button class="btn btn-primary" id="analyzeBtn" style="display:none" onclick="analyzeImage()">Analizar con IA</button>
@@ -540,8 +551,29 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
         <div style="font-size:15px;font-weight:600">Registro de compras</div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="exportXLSX()">Exportar Excel</button>
+          <button class="btn btn-sm" onclick="exportXLSX()">Exportar Excel nuevo</button>
+          <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="document.getElementById('uploadMasterExcel').click()">↑ Subir mi Excel</button>
+          <input type="file" id="uploadMasterExcel" accept=".xlsx" style="display:none" onchange="loadMasterExcel(this)">
+          <button class="btn btn-sm" style="background:#7c3aed;color:#fff" id="btnUpdateExcel" onclick="updateMasterExcel()" style="display:none">↓ Actualizar mi Excel</button>
           <button class="btn btn-success btn-sm" onclick="exportBackup()">Respaldo JSON</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+        <input id="searchHist" type="search" placeholder="🔍 Buscar producto, proveedor..." 
+          oninput="renderHist()"
+          style="flex:1;min-width:180px;padding:7px 12px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:13px">
+        <select id="filterPeriod" onchange="renderHist()" style="padding:7px 10px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:13px">
+          <option value="">Todo el período</option>
+          <option value="7">Últimos 7 días</option>
+          <option value="30">Últimos 30 días</option>
+          <option value="mes">Este mes</option>
+          <option value="anterior">Mes anterior</option>
+          <option value="personalizado">Personalizado</option>
+        </select>
+        <div id="customDateRange" style="display:none;gap:8px;align-items:center">
+          <input type="date" id="fechaDesde" onchange="renderHist()" style="padding:7px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:12px">
+          <span style="color:var(--text3)">→</span>
+          <input type="date" id="fechaHasta" onchange="renderHist()" style="padding:7px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:12px">
         </div>
       </div>
       <div class="chips" id="filterChips"></div>
@@ -550,13 +582,17 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <div class="tbl-wrap">
           <table>
             <thead><tr>
-              <th style="width:90px">Fecha</th>
-              <th style="width:auto">Producto</th>
-              <th style="width:120px">Categoría</th>
-              <th style="width:100px">Proveedor</th>
-              <th style="width:65px">Cant.</th>
-              <th style="width:100px">P.Unit.</th>
-              <th style="width:110px">Total IVA</th>
+              <th id="th-fecha" onclick="sortBy('fecha')" style="cursor:pointer;user-select:none;width:90px">Fecha <span class="sort-icon">▼</span></th>
+              <th id="th-producto" onclick="sortBy('producto')" style="cursor:pointer;user-select:none;width:auto">Producto <span class="sort-icon">⇅</span></th>
+              <th id="th-cat" onclick="sortBy('cat')" style="cursor:pointer;user-select:none;width:120px">Categoría <span class="sort-icon">⇅</span></th>
+              <th id="th-prov" onclick="sortBy('proveedor')" style="cursor:pointer;user-select:none;width:100px">Proveedor <span class="sort-icon">⇅</span></th>
+              <th id="th-cant" onclick="sortBy('cant')" style="cursor:pointer;user-select:none;width:65px">Cant. <span class="sort-icon">⇅</span></th>
+              <th id="th-pu" onclick="sortBy('pu')" style="cursor:pointer;user-select:none;width:100px">P.Unit. <span class="sort-icon">⇅</span></th>
+              <th id="th-total" onclick="sortBy('total')" style="cursor:pointer;user-select:none;width:110px">Total IVA <span class="sort-icon">⇅</span></th>
+              <th style="width:55px">Dcto%</th>
+              <th style="width:80px">Estado</th>
+              <th style="width:36px">📝</th>
+              <th style="width:36px">📷</th>
               <th style="width:36px"></th>
             </tr></thead>
             <tbody id="histTbody"></tbody>
@@ -571,7 +607,35 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
     <!-- RESUMEN -->
     <div id="page-resumen" class="page">
+      <!-- Filtro período resumen -->
+      <div class="card" style="padding:12px 16px;margin-bottom:0">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:12px;color:var(--text3);white-space:nowrap">Período:</span>
+          <select id="resumPeriod" onchange="renderResumen()" style="flex:1;padding:6px 10px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:13px">
+            <option value="">Todo el proyecto</option>
+            <option value="mes">Este mes</option>
+            <option value="anterior">Mes anterior</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+          <div id="resumDateRange" style="display:none;gap:8px;align-items:center">
+            <input type="date" id="resumDesde" onchange="renderResumen()" style="padding:6px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:12px">
+            <span style="color:var(--text3)">→</span>
+            <input type="date" id="resumHasta" onchange="renderResumen()" style="padding:6px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;color:var(--text1);font-size:12px">
+          </div>
+        </div>
+      </div>
       <div class="stat-grid" id="statGrid"></div>
+      <!-- Avance vs Presupuesto -->
+      <div class="card">
+        <div class="card-title">Avance vs Presupuesto aseguradora</div>
+        <div id="presupChart"><div class="empty" style="padding:1rem">Sin datos</div></div>
+      </div>
+      <!-- Evolución temporal -->
+      <div class="card">
+        <div class="card-title">Evolución de gastos mensual</div>
+        <div id="evolucionChart"><div class="empty" style="padding:1rem">Sin datos</div></div>
+      </div>
       <div class="card">
         <div class="card-title">Gasto por categoría</div>
         <div id="catChart"><div class="empty" style="padding:1rem">Sin datos</div></div>
@@ -694,6 +758,35 @@ function saveInlineApiKey(){
   toast('API Key guardada','success');
 }
 let currentUser='';
+let currentProject='casa146';
+
+function showNewProject(){
+  const name=prompt('Nombre del nuevo proyecto (ej: Casa 147):');
+  if(!name||!name.trim()) return;
+  const key=name.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  const sel=document.getElementById('loginProject');
+  if([...sel.options].some(o=>o.value===key)){sel.value=key;toast('Proyecto ya existe','error');return;}
+  const opt=document.createElement('option');
+  opt.value=key; opt.textContent=name.trim(); sel.appendChild(opt); sel.value=key;
+  // Guardar lista de proyectos
+  const projs=JSON.parse(localStorage.getItem('mat_projects')||'{"casa146":"Casa 146"}');
+  projs[key]=name.trim();
+  localStorage.setItem('mat_projects',JSON.stringify(projs));
+  toast(`Proyecto "${name.trim()}" creado`,'success');
+}
+
+function loadProjects(){
+  const sel=document.getElementById('loginProject');
+  const projs=JSON.parse(localStorage.getItem('mat_projects')||'{"casa146":"Casa 146"}');
+  sel.innerHTML='';
+  Object.entries(projs).forEach(([k,v])=>{
+    const o=document.createElement('option');
+    o.value=k; o.textContent=v; sel.appendChild(o);
+  });
+}
+
+function projectKey(k){return 'mat_'+currentProject+'_'+k;}
+
 
 function togglePass(id, btn){
   const inp = document.getElementById(id);
@@ -714,7 +807,10 @@ function doLogin(){
   }
   currentUser=user;
   window._currentUser=user;
+  currentProject=document.getElementById('loginProject').value||'casa146';
+  const projs=JSON.parse(localStorage.getItem('mat_projects')||'{"casa146":"Casa 146"}');
   document.getElementById('userBadge').textContent=user;
+  document.getElementById('projectPill').textContent=(projs[currentProject]||currentProject).toUpperCase();
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='flex';
   document.getElementById('m_fecha').value=new Date().toISOString().split('T')[0];
@@ -722,15 +818,20 @@ function doLogin(){
   if(window._initSync){
     window._initSync().then(()=>{
       populateSelects();renderHist();renderResumen();
+      checkMasterExcel();
       const banner=document.getElementById('apiKeyBanner');
       if(banner) banner.style.display=getApiKey()?'none':'block';
     });
   } else {
     populateSelects();renderHist();renderResumen();
+    checkMasterExcel();
     const banner=document.getElementById('apiKeyBanner');
     if(banner) banner.style.display=getApiKey()?'none':'block';
   }
 }
+
+// Cargar proyectos guardados en el selector
+loadProjects();
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Enter' && document.getElementById('loginScreen').style.display!=='none') doLogin();
@@ -786,13 +887,21 @@ function savePurchases(arr){window._cloudSave?window._cloudSave('mat_purchases',
 // ── SCAN ──────────────────────────────────────────────────────────────────
 function handleFile(inp){
   const file=inp.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const img=document.getElementById('previewImg');
-    img.src=e.target.result;img.style.display='block';
-    document.getElementById('analyzeBtn').style.display='inline-block';
-  };
-  reader.readAsDataURL(file);
+  const isPdf=file.type==='application/pdf';
+  document.getElementById('previewImg').style.display='none';
+  document.getElementById('previewPdf').style.display='none';
+  if(isPdf){
+    document.getElementById('previewPdfName').textContent=file.name;
+    document.getElementById('previewPdf').style.display='block';
+  } else {
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=document.getElementById('previewImg');
+      img.src=e.target.result;img.style.display='block';
+    };
+    reader.readAsDataURL(file);
+  }
+  document.getElementById('analyzeBtn').style.display='inline-block';
 }
 
 function compressImage(file,maxBytes=4500000){
@@ -826,7 +935,8 @@ async function analyzeImage(){
   const key=getApiKey();
   if(!key){toast('Configura tu API Key primero','error');return;}
   const file=document.getElementById('fileInput').files[0];
-  if(!file){toast('Selecciona una imagen','error');return;}
+  if(!file){toast('Selecciona una imagen o PDF','error');return;}
+  const isPdf=file.type==='application/pdf';
   document.getElementById('analyzeBtn').style.display='none';
   document.getElementById('spinner').style.display='block';
   const pb=document.getElementById('progressBar');
@@ -835,14 +945,27 @@ async function analyzeImage(){
   let prog=0;
   const iv=setInterval(()=>{prog=Math.min(prog+6,88);pf.style.width=prog+'%';},220);
   try{
-    const b64=await compressImage(file);
+    let contentBlock;
+    if(isPdf){
+      // PDF: leer como base64 y enviar como documento
+      const buf=await file.arrayBuffer();
+      const bytes=new Uint8Array(buf);
+      let bin='';
+      for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+      const b64=btoa(bin);
+      contentBlock={type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}};
+    } else {
+      // Imagen: comprimir y enviar como imagen
+      const b64=await compressImage(file);
+      contentBlock={type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}};
+    }
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
         model:'claude-sonnet-4-5',max_tokens:1200,
         messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+          contentBlock,
           {type:'text',text:`Analiza esta boleta o factura de materiales de construcción. Extrae todos los productos. Responde SOLO JSON válido sin texto adicional ni markdown:\n{"proveedor":"nombre tienda","fecha":"DD/MM/YYYY","items":[{"producto":"nombre","cantidad":1,"precio_unitario":1000,"categoria":"MATERIALES"}]}\nCategorías disponibles: ${getCats().join(', ')}. Asigna la categoría más apropiada a cada producto según su nombre. Si no encuentras dato usa null.`}
         ]}]
       })
@@ -1041,6 +1164,9 @@ function confirmItems(){
       });
       savePurchases(purchases);
       populateSelects();
+      // Guardar foto de la boleta para el primer ítem
+      const firstId=purchases[purchases.length-items.length]?.id;
+      if(firstId) saveScannedPhoto(firstId);
       resetScan();
       toast(`${items.length} ítem(s) guardados`,'success');
       goPage('historial',document.querySelectorAll('.nav-btn')[2]);
@@ -1056,6 +1182,7 @@ function confirmItems(){
 
 function resetScan(){
   document.getElementById('previewImg').style.display='none';
+  document.getElementById('previewPdf').style.display='none';
   document.getElementById('aiResult').style.display='none';
   document.getElementById('analyzeBtn').style.display='none';
   document.getElementById('fileInput').value='';
@@ -1171,17 +1298,135 @@ function addManual(){
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────
 let filterCat='';
+let sortField='fecha';
+let sortDir='desc';
+
+function getPeriodFilter(periodId, desdeId, hastaId){
+  const period = (document.getElementById(periodId)||{}).value||'';
+  const now = new Date();
+  if(!period) return null;
+  if(period==='personalizado'){
+    const desde=(document.getElementById(desdeId)||{}).value||'';
+    const hasta=(document.getElementById(hastaId)||{}).value||'';
+    const dr=document.getElementById(desdeId+'Range')||document.getElementById(periodId.replace('Period','DateRange'))||document.getElementById('customDateRange');
+    if(dr) dr.style.display='flex';
+    return {desde, hasta};
+  }
+  const dr=document.getElementById(periodId.replace('Period','DateRange'))||document.getElementById('customDateRange');
+  if(dr) dr.style.display='none';
+  if(period==='mes'){
+    const desde=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const hasta=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
+    return {desde,hasta};
+  }
+  if(period==='anterior'){
+    const d=new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const h=new Date(now.getFullYear(), now.getMonth(), 0);
+    const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return {desde:fmt(d),hasta:fmt(h)};
+  }
+  if(period==='7'||period==='30'){
+    const days=+period;
+    const d=new Date(now-days*86400000);
+    const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return {desde:fmt(d),hasta:fmt(now)};
+  }
+  return null;
+}
+
+function applyPeriodFilter(arr, pf){
+  if(!pf) return arr;
+  return arr.filter(p=>{
+    if(pf.desde && p.fecha < pf.desde) return false;
+    if(pf.hasta && p.fecha > pf.hasta) return false;
+    return true;
+  });
+}
+
+function suggestProductMerge(purchases){
+  const productos=[...new Set(purchases.map(p=>p.producto))];
+  const sugerencias=[];
+  for(let i=0;i<productos.length;i++){
+    for(let j=i+1;j<productos.length;j++){
+      const s=similarity(productos[i],productos[j]);
+      if(s>=0.55&&s<1) sugerencias.push({a:productos[i],b:productos[j],score:s});
+    }
+  }
+  const container=document.getElementById('mergeHint');
+  if(!container) return;
+  if(!sugerencias.length){container.style.display='none';return;}
+  const top=sugerencias.sort((a,b)=>b.score-a.score)[0];
+  const keep=top.a.length<=top.b.length?top.a:top.b;
+  container.style.display='block';
+  container.innerHTML=`
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">💡 ¿Son el mismo producto?</div>
+    <div style="font-size:12px;margin-bottom:10px">
+      <strong style="color:#60a5fa">"${top.a}"</strong> y <strong style="color:#60a5fa">"${top.b}"</strong>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="mergeProducts('${top.a.replace(/'/g,"\\'")}','${top.b.replace(/'/g,"\\'")}','${keep.replace(/'/g,"\\'")}');"
+        style="flex:1;padding:6px;background:#2e75b6;border:none;border-radius:6px;color:#fff;font-size:11px;cursor:pointer">
+        Unir como "${keep}"
+      </button>
+      <button onclick="document.getElementById('mergeHint').style.display='none'"
+        style="padding:6px 10px;background:transparent;border:0.5px solid rgba(255,255,255,.15);border-radius:6px;color:#94a3b8;font-size:11px;cursor:pointer">
+        No son iguales
+      </button>
+    </div>`;
+}
+
+function mergeProducts(nameA,nameB,keepName){
+  const arr=getPurchases();
+  let changed=0;
+  arr.forEach(p=>{if(p.producto===nameA||p.producto===nameB){p.producto=keepName;changed++;}});
+  savePurchases(arr);
+  renderHist();
+  toast(`${changed} registros unificados como "${keepName}"`,'success');
+}
+
+function sortBy(field){
+  if(sortField===field) sortDir=sortDir==='asc'?'desc':'asc';
+  else{sortField=field;sortDir=field==='fecha'?'desc':'asc';}
+  renderHist();
+}
+
+function sortIcon(field){
+  if(sortField!==field) return '<span style="opacity:.3;font-size:10px">⇅</span>';
+  return sortDir==='asc'?'<span style="font-size:10px">▲</span>':'<span style="font-size:10px">▼</span>';
+}
+
 function renderHist(){
   const all=getPurchases();
-  const list=filterCat?all.filter(p=>p.cat===filterCat):all;
+  const q=(document.getElementById('searchHist')||{}).value||'';
+  const pf=getPeriodFilter('filterPeriod','fechaDesde','fechaHasta');
+  if((document.getElementById('customDateRange'))) {
+    document.getElementById('customDateRange').style.display=
+      ((document.getElementById('filterPeriod')||{}).value==='personalizado')?'flex':'none';
+  }
+  let list=filterCat?all.filter(p=>p.cat===filterCat):[...all];
+  list=applyPeriodFilter(list,pf);
+  if(q){
+    const ql=q.toLowerCase();
+    list=list.filter(p=>(p.producto||'').toLowerCase().includes(ql)||(p.proveedor||'').toLowerCase().includes(ql)||(p.cat||'').toLowerCase().includes(ql)||(p.notas||'').toLowerCase().includes(ql));
+  }
+  const cats=getCats();
+
+  list.sort((a,b)=>{
+    let va=a[sortField]||'', vb=b[sortField]||'';
+    if(['cant','pu','total'].includes(sortField)){va=+va;vb=+vb;}
+    else{va=String(va).toLowerCase();vb=String(vb).toLowerCase();}
+    if(va<vb) return sortDir==='asc'?-1:1;
+    if(va>vb) return sortDir==='asc'?1:-1;
+    return 0;
+  });
+
   const tbody=document.getElementById('histTbody');
   const empty=document.getElementById('emptyHist');
-  const cats=getCats();
-  const catOptions=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+
   if(!list.length){tbody.innerHTML='';empty.style.display='block';}
   else{
     empty.style.display='none';
-    tbody.innerHTML=list.slice().reverse().map(p=>`<tr data-id="${p.id}">
+    tbody.innerHTML=list.map(p=>`<tr data-id="${p.id}">
       <td><input class="cell-edit" type="date" value="${p.fecha}" onchange="editItem(${p.id},'fecha',this.value)"></td>
       <td><input class="cell-edit" type="text" value="${p.producto}" onchange="editItem(${p.id},'producto',this.value)" style="width:100%"></td>
       <td>
@@ -1194,64 +1439,51 @@ function renderHist(){
       <td><input class="cell-edit mono" type="number" value="${p.cant}" min="0" step="0.01" onchange="editItem(${p.id},'cant',parseFloat(this.value)||0)" style="width:60px"></td>
       <td><input class="cell-edit mono" type="number" value="${p.pu}" min="0" step="1" onchange="editItem(${p.id},'pu',parseFloat(this.value)||0)" style="width:88px"></td>
       <td class="mono" style="font-weight:600;color:var(--green)" id="total-${p.id}">$${p.total.toLocaleString('es-CL')}</td>
+      <td><input class="cell-edit mono" type="number" value="${p.dcto||0}" min="0" max="100" step="0.1" onchange="editItem(${p.id},'dcto',parseFloat(this.value)||0)" style="width:46px" title="% Descuento"></td>
+      <td><select class="cell-edit" onchange="editItem(${p.id},'estado',this.value)" style="width:76px;font-size:11px">${['Pagado','Pendiente','Crédito'].map(s=>`<option value="${s}"${(p.estado||'Pagado')===s?' selected':''}>${s}</option>`).join('')}</select></td>
+      <td><button class="btn-icon" onclick="editNota(${p.id})" title="${p.notas||'Sin nota'}" style="color:${p.notas?'#60a5fa':'var(--text3)'}">📝</button></td>
+      <td><button class="btn-icon" id="photobtn-${p.id}" onclick="showPhotoModal(${p.id})" title="Ver/adjuntar foto" style="color:var(--text3)">📷</button></td>
       <td><button class="btn-icon" onclick="delItem(${p.id})" title="Eliminar">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
       </button></td>
     </tr>`).join('');
   }
+
+  // Actualizar íconos de orden en encabezados
+  [['th-fecha','fecha'],['th-producto','producto'],['th-cat','cat'],
+   ['th-prov','proveedor'],['th-cant','cant'],['th-pu','pu'],['th-total','total']
+  ].forEach(([id,field])=>{
+    const el=document.getElementById(id);
+    if(el){const si=el.querySelector('.sort-icon');if(si)si.innerHTML=sortIcon(field);}
+  });
+
   const cats2=[...new Set(all.map(p=>p.cat))];
   document.getElementById('filterChips').innerHTML=
     `<button class="chip${!filterCat?' active':''}" onclick="setFilter('')">Todos (${all.length})</button>`+
     cats2.map(c=>`<button class="chip${filterCat===c?' active':''}" onclick="setFilter('${c}')">${c}</button>`).join('');
 
-  // Sugerir agrupación de productos similares
   suggestProductMerge(all);
+  // Actualizar íconos de foto
+  setTimeout(()=>{
+    getPurchases().forEach(async p=>{
+      const btn=document.getElementById('photobtn-'+p.id);
+      if(!btn) return;
+      const photo=await getPhotoForRecord(p.id);
+      if(photo) btn.style.color='#60a5fa';
+    });
+  },100);
 }
 
-function suggestProductMerge(purchases){
-  // Buscar productos similares que podrían ser el mismo
-  const productos=[...new Set(purchases.map(p=>p.producto))];
-  const sugerencias=[];
-  for(let i=0;i<productos.length;i++){
-    for(let j=i+1;j<productos.length;j++){
-      const s=similarity(productos[i],productos[j]);
-      if(s>=0.55 && s<1){
-        sugerencias.push({a:productos[i],b:productos[j],score:s});
-      }
-    }
-  }
-  const container=document.getElementById('mergeHint');
-  if(!container) return;
-  if(!sugerencias.length){container.style.display='none';return;}
-  // Mostrar solo la sugerencia más relevante
-  const top=sugerencias.sort((a,b)=>b.score-a.score)[0];
-  container.style.display='block';
-  container.innerHTML=`
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">💡 ¿Son el mismo producto?</div>
-    <div style="font-size:12px;margin-bottom:10px">
-      <strong style="color:#60a5fa">"${top.a}"</strong> y <strong style="color:#60a5fa">"${top.b}"</strong>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="mergeProducts('${top.a.replace(/'/g,"\\'")}','${top.b.replace(/'/g,"\\'")}','${top.a.replace(/'/g,"\\'")}');" 
-        style="flex:1;padding:6px;background:#2e75b6;border:none;border-radius:6px;color:#fff;font-size:11px;cursor:pointer">
-        Unir como "${top.a.length<=top.b.length?top.a:top.b}"
-      </button>
-      <button onclick="document.getElementById('mergeHint').style.display='none'"
-        style="padding:6px 10px;background:transparent;border:0.5px solid rgba(255,255,255,.15);border-radius:6px;color:#94a3b8;font-size:11px;cursor:pointer">
-        No son iguales
-      </button>
-    </div>`;
-}
-
-function mergeProducts(nameA, nameB, keepName){
+function editNota(id){
   const arr=getPurchases();
-  let changed=0;
-  arr.forEach(p=>{
-    if(p.producto===nameA||p.producto===nameB){p.producto=keepName;changed++;}
-  });
+  const p=arr.find(x=>x.id===id);
+  if(!p) return;
+  const nota=prompt('Nota para este registro:',p.notas||'');
+  if(nota===null) return;
+  p.notas=nota.trim();
   savePurchases(arr);
   renderHist();
-  toast(`${changed} registros unificados como "${keepName}"`,'success');
+  toast('Nota guardada','success');
 }
 
 function editItem(id,field,value){
@@ -1275,14 +1507,75 @@ function delItem(id){
 
 // ── RESUMEN ───────────────────────────────────────────────────────────────
 function renderResumen(){
-  const arr=getPurchases();
+  const PRESUPUESTO={"INSTALACION DE FAENA": 6000000, "CIMIENTOS": 18000000, "ESTRUCTURA": 21300000, "REVESTIMIENTO": 3000000, "TERMINACIONES": 20000000, "ELECTRICIDAD": 8300000, "SANITARIO": 6000000, "COCINA": 9000000, "BAÑOS": 5000000, "CLIMA": 4800000, "VARIOS": 5000000, "ESCOMBROS": 900000, "MANO DE OBRA": 50000000};
+  const PRESUPUESTO_TOTAL=182940000;
+  const pf=getPeriodFilter('resumPeriod','resumDesde','resumHasta');
+  if(document.getElementById('resumDateRange'))
+    document.getElementById('resumDateRange').style.display=
+      ((document.getElementById('resumPeriod')||{}).value==='personalizado')?'flex':'none';
+  const all=getPurchases();
+  const arr=applyPeriodFilter(all,pf);
   const total=arr.reduce((s,p)=>s+p.total,0);
   const neto=arr.reduce((s,p)=>s+Math.round(p.cant*p.pu),0);
+  const pendiente=arr.filter(p=>p.estado==='Pendiente').reduce((s,p)=>s+p.total,0);
+  const pct=Math.round(total/182940000*100);
+  const pendiente=arr.filter(p=>p.estado==='Pendiente').reduce((s,p)=>s+p.total,0);
   document.getElementById('statGrid').innerHTML=`
     <div class="stat"><div class="stat-label">Total c/IVA</div><div class="stat-val">$${fmt(total)}</div><div class="stat-sub">IVA incluido 19%</div></div>
     <div class="stat"><div class="stat-label">Total neto</div><div class="stat-val">$${fmt(neto)}</div></div>
+    <div class="stat"><div class="stat-label">Avance presup.</div><div class="stat-val">${pct}%</div><div class="stat-sub">de $${fmt(182940000)}</div></div>
+    <div class="stat" style="${pendiente>0?'border:1px solid #f59e0b':''}"><div class="stat-label">Pendiente pago</div><div class="stat-val" style="${pendiente>0?'color:#f59e0b':''}">${pendiente>0?'$'+fmt(pendiente):'-'}</div></div>
     <div class="stat"><div class="stat-label">Compras</div><div class="stat-val">${arr.length}</div></div>
     <div class="stat"><div class="stat-label">Proveedores</div><div class="stat-val">${new Set(arr.map(p=>p.proveedor)).size}</div></div>`;
+
+  // ── Gráfico avance vs presupuesto por categoría ──
+  const PRESUPUESTO_CAT={"INSTALACION DE FAENA":6000000,"CIMIENTOS":18000000,"ESTRUCTURA":21300000,"REVESTIMIENTO":3000000,"TERMINACIONES":20000000,"ELECTRICIDAD":8300000,"SANITARIO":6000000,"COCINA":9000000,"BAÑOS":5000000,"CLIMA":4800000,"VARIOS":5000000,"ESCOMBROS":900000,"MANO DE OBRA":50000000};
+  const gastoCat={};arr.forEach(p=>{gastoCat[p.cat]=(gastoCat[p.cat]||0)+p.total;});
+  const presupCats=[...new Set([...Object.keys(PRESUPUESTO_CAT),...Object.keys(gastoCat)])];
+  document.getElementById('presupChart').innerHTML=presupCats.map(cat=>{
+    const presup=PRESUPUESTO_CAT[cat]||0;
+    const gasto=gastoCat[cat]||0;
+    const pct=presup?Math.min(100,Math.round(gasto/presup*100)):0;
+    const over=gasto>presup&&presup>0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+        <span style="color:var(--text2)">${cat}</span>
+        <span style="color:${over?'#ef4444':'var(--text3)'}">$${fmt(gasto)} / $${fmt(presup)} (${pct}%)</span>
+      </div>
+      <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${over?'#ef4444':pct>80?'#f59e0b':'#22c55e'};border-radius:4px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('')||'<div class="empty" style="padding:1rem">Sin datos</div>';
+
+  // ── Gráfico evolución temporal (gasto mensual) ──
+  const byMonth={};
+  all.forEach(p=>{
+    if(!p.fecha) return;
+    const mes=p.fecha.slice(0,7); // YYYY-MM
+    byMonth[mes]=(byMonth[mes]||0)+p.total;
+  });
+  const meses=Object.keys(byMonth).sort();
+  let acum=0;
+  const maxM=Math.max(...Object.values(byMonth),1);
+  document.getElementById('evolucionChart').innerHTML=meses.length?`
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Gasto mensual (barra) y acumulado (línea)</div>
+    <div style="display:flex;align-items:flex-end;gap:4px;height:80px;padding-bottom:20px;position:relative">
+      ${meses.map(m=>{
+        const v=byMonth[m];
+        const h=Math.round(v/maxM*70);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div style="width:100%;height:${h}px;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px" title="$${fmt(v)}"></div>
+          <div style="font-size:9px;color:var(--text3);transform:rotate(-45deg);transform-origin:top left;white-space:nowrap;margin-top:4px">${m.slice(5)}-${m.slice(2,4)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:4px;border-top:0.5px solid var(--border);padding-top:6px">
+      <span>Total período: <strong style="color:var(--text1)">$${fmt(Object.values(byMonth).reduce((s,v)=>s+v,0))}</strong></span>
+      <span>Meses: ${meses.length}</span>
+    </div>
+  `:'<div class="empty" style="padding:1rem">Sin datos de evolución</div>';
+
   const byCat={};arr.forEach(p=>{byCat[p.cat]=(byCat[p.cat]||0)+p.total;});
   const maxC=Math.max(...Object.values(byCat),1);
   document.getElementById('catChart').innerHTML=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`
@@ -1325,6 +1618,17 @@ function exportBackup(){
 function clearData(){
   if(!confirm('¿Borrar TODOS los registros? Esta acción no se puede deshacer.'))return;
   savePurchases([]);toast('Datos eliminados');renderHist();renderResumen();
+}
+
+// ── MEJORA 4: Exportar con filtros aplicados ─────────────────
+function getFilteredPurchases(){
+  const all=getPurchases();
+  const q=(document.getElementById('searchHist')||{}).value||'';
+  const pf=getPeriodFilter('filterPeriod','fechaDesde','fechaHasta');
+  let list=filterCat?all.filter(p=>p.cat===filterCat):[...all];
+  list=applyPeriodFilter(list,pf);
+  if(q){const ql=q.toLowerCase();list=list.filter(p=>(p.producto||'').toLowerCase().includes(ql)||(p.proveedor||'').toLowerCase().includes(ql));}
+  return list;
 }
 
 // ── EXPORT XLSX ───────────────────────────────────────────────────────────
@@ -1517,8 +1821,283 @@ function buildXlsxZip(files){
   return concat(...parts,cdData,eocd);
 }
 
+// ── FOTO ADJUNTA AL REGISTRO ──────────────────────────────────────────────
+function savePhotoForRecord(id, dataUrl){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open('casa146db',1);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('files')) db.createObjectStore('files');
+      if(!db.objectStoreNames.contains('photos')) db.createObjectStore('photos');
+    };
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('photos','readwrite');
+      tx.objectStore('photos').put(dataUrl,'photo_'+id);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    };
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+function getPhotoForRecord(id){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open('casa146db',1);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('files')) db.createObjectStore('files');
+      if(!db.objectStoreNames.contains('photos')) db.createObjectStore('photos');
+    };
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('photos','readonly');
+      const r=tx.objectStore('photos').get('photo_'+id);
+      r.onsuccess=()=>resolve(r.result||null);
+      r.onerror=()=>reject(r.error);
+    };
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+function deletePhotoForRecord(id){
+  return new Promise((resolve)=>{
+    const req=indexedDB.open('casa146db',1);
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('photos')){resolve();return;}
+      const tx=db.transaction('photos','readwrite');
+      tx.objectStore('photos').delete('photo_'+id);
+      tx.oncomplete=()=>resolve();
+    };
+    req.onerror=()=>resolve();
+  });
+}
+
+function showPhotoModal(id){
+  getPhotoForRecord(id).then(dataUrl=>{
+    const old=document.getElementById('photoModal');if(old)old.remove();
+    const div=document.createElement('div');
+    div.id='photoModal';
+    div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+    if(dataUrl){
+      div.innerHTML=`
+        <div style="max-width:500px;width:100%;background:#181c27;border-radius:12px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:0.5px solid rgba(255,255,255,.1)">
+            <span style="font-size:13px;font-weight:600;color:#f1f5f9">Boleta adjunta</span>
+            <div style="display:flex;gap:8px">
+              <button onclick="attachNewPhoto(${id})" style="padding:6px 12px;background:#2e75b6;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer">Cambiar foto</button>
+              <button onclick="removePhoto(${id})" style="padding:6px 12px;background:#ef4444;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer">Eliminar</button>
+              <button onclick="document.getElementById('photoModal').remove()" style="padding:6px 12px;background:transparent;border:0.5px solid rgba(255,255,255,.2);border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cerrar</button>
+            </div>
+          </div>
+          <img src="${dataUrl}" style="width:100%;max-height:70vh;object-fit:contain;display:block">
+        </div>`;
+    } else {
+      div.innerHTML=`
+        <div style="max-width:400px;width:100%;background:#181c27;border-radius:12px;padding:1.5rem;text-align:center">
+          <div style="font-size:40px;margin-bottom:12px">📷</div>
+          <div style="font-size:14px;font-weight:600;color:#f1f5f9;margin-bottom:8px">Sin foto adjunta</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Adjunta la boleta o factura de este registro</div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button onclick="attachNewPhoto(${id})" style="padding:10px 20px;background:#2e75b6;border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer">Adjuntar foto</button>
+            <button onclick="document.getElementById('photoModal').remove()" style="padding:10px 16px;background:transparent;border:0.5px solid rgba(255,255,255,.2);border-radius:8px;color:#94a3b8;font-size:13px;cursor:pointer">Cerrar</button>
+          </div>
+        </div>`;
+    }
+    div.onclick=e=>{if(e.target===div)div.remove();};
+    document.body.appendChild(div);
+  });
+}
+
+function attachNewPhoto(id){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='image/*,application/pdf';
+  input.onchange=async()=>{
+    const file=input.files[0]; if(!file) return;
+    const old=document.getElementById('photoModal'); if(old) old.remove();
+    toast('Guardando foto...','');
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      await savePhotoForRecord(id, e.target.result);
+      toast('Foto adjuntada','success');
+      renderHist();
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+async function removePhoto(id){
+  await deletePhotoForRecord(id);
+  const old=document.getElementById('photoModal'); if(old) old.remove();
+  toast('Foto eliminada','success');
+  renderHist();
+}
+
+// Guardar foto al confirmar escaneo
+async function saveScannedPhoto(id){
+  const file=document.getElementById('fileInput').files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async e=>{ await savePhotoForRecord(id, e.target.result); };
+  reader.readAsDataURL(file);
+}
+
+// ── EXCEL MAESTRO ─────────────────────────────────────────────────────────
+// Guarda el archivo xlsx del usuario en IndexedDB (puede ser >5MB, no cabe en localStorage)
+function saveMasterExcel(arrayBuffer){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open('casa146db',1);
+    req.onupgradeneeded=e=>e.target.result.createObjectStore('files');
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('files','readwrite');
+      tx.objectStore('files').put(arrayBuffer,'masterExcel');
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    };
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+function getMasterExcel(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open('casa146db',1);
+    req.onupgradeneeded=e=>e.target.result.createObjectStore('files');
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('files','readonly');
+      const r=tx.objectStore('files').get('masterExcel');
+      r.onsuccess=()=>resolve(r.result||null);
+      r.onerror=()=>reject(r.error);
+    };
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+async function loadMasterExcel(input){
+  const file=input.files[0]; if(!file) return;
+  const buf=await file.arrayBuffer();
+  await saveMasterExcel(buf);
+  document.getElementById('btnUpdateExcel').style.display='inline-block';
+  toast(`"${file.name}" cargado. Usa "Actualizar mi Excel" para exportar.`,'success');
+  input.value='';
+}
+
+async function updateMasterExcel(){
+  const buf=await getMasterExcel();
+  if(!buf){toast('Primero sube tu archivo Excel con "↑ Subir mi Excel"','error');return;}
+
+  const purchases=getPurchases();
+  if(!purchases.length){toast('No hay datos para exportar','error');return;}
+
+  // Leer el xlsx con SheetJS
+  const wb=XLSX.read(buf,{type:'array',cellStyles:true,cellDates:true});
+
+  // Verificar que tiene la hoja CASA 146
+  if(!wb.SheetNames.includes('CASA 146')){
+    toast('El archivo no contiene la hoja "CASA 146"','error');return;
+  }
+
+  // Ordenar por fecha
+  const sorted=[...purchases].sort((a,b)=>a.fecha>b.fecha?1:a.fecha<b.fecha?-1:0);
+
+  // Reconstruir la hoja CASA 146 con los datos actuales
+  const ws=wb.Sheets['CASA 146'];
+  const DATA_START=4, DATA_ROWS=200;
+  const TOTAL_ROW=DATA_START+DATA_ROWS+3; // 207
+  const NOTE_ROW=TOTAL_ROW+2;             // 209
+
+  // Colores
+  const STRIPE1={patternType:'solid',fgColor:{rgb:'FFEBF3FB'},bgColor:{rgb:'FFFFFFFF'}};
+  const STRIPE2={patternType:'solid',fgColor:{rgb:'FFFFFFFF'},bgColor:{rgb:'FFFFFFFF'}};
+  const YELLOW ={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFFFFF'}};
+  const BLUE   ={patternType:'solid',fgColor:{rgb:'FF1F4E79'},bgColor:{rgb:'FFFFFFFF'}};
+
+  const s=(c,r)=>XLSX.utils.encode_cell({c,r});
+
+  function dateToSerial(fechaStr){
+    if(!fechaStr) return null;
+    let y,m,d;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)){[y,m,d]=fechaStr.split('-').map(Number);}
+    else if(/^\d{2}\/\d{2}\/\d{4}$/.test(fechaStr)){[d,m,y]=fechaStr.split('/').map(Number);}
+    else return null;
+    const base=Date.UTC(1899,11,31);
+    const target=Date.UTC(y,m-1,d);
+    let n=Math.round((target-base)/86400000);
+    if(n>=60) n++;
+    return n;
+  }
+
+  // Limpiar filas de datos anteriores y escribir nuevos
+  for(let r=0;r<DATA_ROWS;r++){
+    const row=DATA_START+r;
+    const p=sorted[r];
+    const stripe=r%2===0?STRIPE1:STRIPE2;
+    const rIdx=row-1; // 0-based para SheetJS
+
+    // A: número
+    ws[s(0,rIdx)]={v:r+1,t:'n',s:{fill:stripe,font:{sz:9,bold:true},alignment:{horizontal:'center',vertical:'center'}}};
+
+    if(p){
+      const fd=dateToSerial(p.fecha);
+      // B: fecha
+      ws[s(1,rIdx)]={v:fd||p.fecha,t:fd?'n':'s',z:'DD/MM/YYYY',s:{fill:stripe,alignment:{horizontal:'center',vertical:'center'}}};
+      // C: producto
+      ws[s(2,rIdx)]={v:p.producto,t:'s',s:{fill:YELLOW,alignment:{horizontal:'left',vertical:'center'}}};
+      // D: categoría
+      ws[s(3,rIdx)]={v:p.cat,t:'s',s:{fill:YELLOW,alignment:{horizontal:'center',vertical:'center'}}};
+      // E: proveedor
+      ws[s(4,rIdx)]={v:p.proveedor||'',t:'s',s:{fill:YELLOW,alignment:{horizontal:'center',vertical:'center'}}};
+      // F: cantidad
+      ws[s(5,rIdx)]={v:p.cant,t:'n',z:'#,##0',s:{fill:YELLOW,alignment:{horizontal:'center',vertical:'center'}}};
+      // G: precio unit
+      ws[s(6,rIdx)]={v:p.pu,t:'n',z:'$#,##0',s:{fill:YELLOW,alignment:{horizontal:'right',vertical:'center'}}};
+      // H: descuento
+      ws[s(7,rIdx)]={v:(p.dcto||0)/100,t:'n',z:'0.0%',s:{fill:YELLOW,alignment:{horizontal:'center',vertical:'center'}}};
+    } else {
+      // Fila vacía
+      for(let c=2;c<8;c++) ws[s(c,rIdx)]={v:'',t:'s',s:{fill:YELLOW}};
+    }
+    // I: fórmula precio c/dcto
+    ws[s(8,rIdx)]={f:`IF(G${row}="","",G${row}*(1-H${row}))`,t:'n',z:'$#,##0',s:{fill:stripe,font:{color:{rgb:'FF1F4E79'}},alignment:{horizontal:'right',vertical:'center'}}};
+    // J: fórmula total c/IVA
+    ws[s(9,rIdx)]={f:`IF(OR(F${row}="",I${row}=""),"",F${row}*I${row}*1.19)`,t:'n',z:'$#,##0',s:{fill:stripe,font:{bold:true,color:{rgb:'FF1E6B3C'}},alignment:{horizontal:'right',vertical:'center'}}};
+  }
+
+  // TOTAL GENERAL
+  const trIdx=TOTAL_ROW-1;
+  ws[s(0,trIdx)]={v:'TOTAL GENERAL',t:'s',s:{fill:BLUE,font:{bold:true,sz:11,color:{rgb:'FFFFFFFF'}},alignment:{horizontal:'center',vertical:'center'}}};
+  ws[s(9,trIdx)]={f:`SUM(J${DATA_START}:J${DATA_START+DATA_ROWS-1})`,t:'n',z:'$#,##0',s:{fill:BLUE,font:{bold:true,sz:11,color:{rgb:'FFFFFFFF'}},alignment:{horizontal:'right',vertical:'center'}}};
+
+  // Nota
+  const nrIdx=NOTE_ROW-1;
+  ws[s(0,nrIdx)]={v:'⚠ Celdas amarillas = ingreso manual   |   Celdas azules = calculado automático   |   IVA: 19%',t:'s',s:{font:{sz:9,color:{rgb:'FF666666'}},alignment:{horizontal:'left'}}};
+
+  // Actualizar rango
+  ws['!ref']=`A1:J${NOTE_ROW}`;
+
+  // Exportar
+  const outBuf=XLSX.write(wb,{type:'array',bookType:'xlsx',cellStyles:true});
+  const blob=new Blob([outBuf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='Detalle_aportes_Carolina_Morales_Olmos.xlsx';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+  toast(`Excel actualizado con ${sorted.length} registros`,'success');
+}
+
+async function checkMasterExcel(){
+  try{
+    const buf=await getMasterExcel();
+    if(buf) document.getElementById('btnUpdateExcel').style.display='inline-block';
+  }catch(e){}
+}
+
 function exportXLSX(){
-  const arr=getPurchases();
+  const arr=getFilteredPurchases();
   if(!arr.length){toast('No hay datos para exportar','error');return;}
 
   try{
