@@ -319,7 +319,7 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 
 /* ── TABLE ── */
 .tbl-wrap{overflow-x:auto;border-radius:var(--radius)}
-table{width:max-content;min-width:100%;border-collapse:collapse;table-layout:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
 th{
   font-size:11px;font-weight:500;color:var(--text3);padding:8px 10px;
   text-align:left;border-bottom:0.5px solid var(--border);
@@ -582,18 +582,18 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <div class="tbl-wrap">
           <table>
             <thead><tr>
-              <th id="th-fecha" onclick="sortBy('fecha')" style="cursor:pointer;user-select:none;width:110px;min-width:110px">Fecha <span class="sort-icon">▼</span></th>
-              <th id="th-producto" onclick="sortBy('producto')" style="cursor:pointer;user-select:none;width:220px;min-width:220px">Producto <span class="sort-icon">⇅</span></th>
-              <th id="th-cat" onclick="sortBy('cat')" style="cursor:pointer;user-select:none;width:130px;min-width:130px">Categoría <span class="sort-icon">⇅</span></th>
-              <th id="th-prov" onclick="sortBy('proveedor')" style="cursor:pointer;user-select:none;width:120px;min-width:120px">Proveedor <span class="sort-icon">⇅</span></th>
-              <th id="th-cant" onclick="sortBy('cant')" style="cursor:pointer;user-select:none;width:70px;min-width:70px">Cant. <span class="sort-icon">⇅</span></th>
-              <th id="th-pu" onclick="sortBy('pu')" style="cursor:pointer;user-select:none;width:110px;min-width:110px">P.Unit. <span class="sort-icon">⇅</span></th>
-              <th id="th-total" onclick="sortBy('total')" style="cursor:pointer;user-select:none;width:110px;min-width:110px">Total IVA <span class="sort-icon">⇅</span></th>
-              <th style="width:65px;min-width:65px">Dcto%</th>
-              <th style="width:90px;min-width:90px">Estado</th>
-              <th style="width:36px;min-width:36px">📝</th>
-              <th style="width:36px;min-width:36px">📷</th>
-              <th style="width:36px;min-width:36px"></th>
+              <th id="th-fecha" onclick="sortBy('fecha')" style="cursor:pointer;user-select:none;width:90px">Fecha <span class="sort-icon">▼</span></th>
+              <th id="th-producto" onclick="sortBy('producto')" style="cursor:pointer;user-select:none;width:auto">Producto <span class="sort-icon">⇅</span></th>
+              <th id="th-cat" onclick="sortBy('cat')" style="cursor:pointer;user-select:none;width:120px">Categoría <span class="sort-icon">⇅</span></th>
+              <th id="th-prov" onclick="sortBy('proveedor')" style="cursor:pointer;user-select:none;width:100px">Proveedor <span class="sort-icon">⇅</span></th>
+              <th id="th-cant" onclick="sortBy('cant')" style="cursor:pointer;user-select:none;width:65px">Cant. <span class="sort-icon">⇅</span></th>
+              <th id="th-pu" onclick="sortBy('pu')" style="cursor:pointer;user-select:none;width:100px">P.Unit. <span class="sort-icon">⇅</span></th>
+              <th id="th-total" onclick="sortBy('total')" style="cursor:pointer;user-select:none;width:110px">Total IVA <span class="sort-icon">⇅</span></th>
+              <th style="width:55px">Dcto%</th>
+              <th style="width:80px">Estado</th>
+              <th style="width:36px">📝</th>
+              <th style="width:36px">📷</th>
+              <th style="width:36px"></th>
             </tr></thead>
             <tbody id="histTbody"></tbody>
           </table>
@@ -963,7 +963,7 @@ async function analyzeImage(){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-5',max_tokens:1200,
+        model:'claude-sonnet-4-6',max_tokens:4000,
         messages:[{role:'user',content:[
           contentBlock,
           {type:'text',text:`Analiza esta boleta o factura de materiales de construcción. Extrae todos los productos. Responde SOLO JSON válido sin texto adicional ni markdown:\n{"proveedor":"nombre tienda","fecha":"DD/MM/YYYY","items":[{"producto":"nombre","cantidad":1,"precio_unitario":1000,"categoria":"MATERIALES"}]}\nCategorías disponibles: ${getCats().join(', ')}. Asigna la categoría más apropiada a cada producto según su nombre. Si no encuentras dato usa null.`}
