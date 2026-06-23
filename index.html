@@ -1658,7 +1658,7 @@ function xmlEsc(s){
 }
 
 function buildSheetXml(records){
-  const DATA_ROWS=200, DS=4;
+  const DATA_ROWS=Math.max(records.length+50,200), DS=4;
   const TOTAL_ROW=DS+DATA_ROWS;   // 204
   const NOTE_ROW=TOTAL_ROW+2;     // 206
 
@@ -2004,7 +2004,7 @@ async function updateMasterExcel(){
 
   // Reconstruir la hoja CASA 146 con los datos actuales
   const ws=wb.Sheets['CASA 146'];
-  const DATA_START=4, DATA_ROWS=200;
+  const DATA_START=4, DATA_ROWS=Math.max(sorted.length+50,200);
   const TOTAL_ROW=DATA_START+DATA_ROWS+3; // 207
   const NOTE_ROW=TOTAL_ROW+2;             // 209
 
@@ -2220,7 +2220,7 @@ async function detectDuplicates(){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-5',max_tokens:2000,
+        model:'claude-sonnet-4-6',max_tokens:4000,
         messages:[{role:'user',content:`Analiza esta lista de productos de construcción y encuentra grupos de nombres que probablemente sean el mismo producto con nombres distintos. Considera variaciones de mayúsculas, abreviaciones, marcas incluidas en el nombre, singular/plural, etc.
 
 Lista de productos:
